@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spectrofluorometer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Spectrofluorometer</h1>
+    <span id="status" class="status idle">idle</span>
+  </header>
+
+  <main>
+    <section class="panel">
+      <nav id="tabs"></nav>
+      <form id="form">
+        <label>Sample name <input id="sample" type="text" placeholder="optional"></label>
+        <div id="fields"></div>
+        <div class="buttons">
+          <button id="start" type="submit">Start</button>
+          <button id="stop" type="button" disabled>Stop</button>
+        </div>
+        <p id="message"></p>
+      </form>
+    </section>
+
+    <section class="panel plot-panel">
+      <div class="plot-header">
+        <strong id="plot-title">No data</strong>
+        <label><input id="logy" type="checkbox"> Log scale</label>
+      </div>
+      <canvas id="plot"></canvas>
+    </section>
+
+    <section class="panel results">
+      <h2>Saved measurements</h2>
+      <table>
+        <tbody id="results"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

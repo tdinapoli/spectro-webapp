@@ -1,0 +1,12 @@
+[Unit]
+Description=Spectrofluorometer web app
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/spectro/server.py --port 8000 --data /var/lib/spectro
+WorkingDirectory=/opt/spectro
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target
