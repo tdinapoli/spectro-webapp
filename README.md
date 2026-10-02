@@ -42,10 +42,16 @@ journalctl -u spectro -f
 
 ## Using the real instrument
 
-Replace the bodies of `emission`, `excitation` and `lifetime` in
-`measurements.py`. Each one is a generator:
+In `measurements.py`, replace the body of `initialize()` with the set-up your
+scripts do (FPGA, spectrometer, motors) and return the object the measurements
+need. It runs when someone presses **Initialize** in the page, and the result is
+kept while the server runs. Measurements can't start before that.
 
-- it receives `stop` (a `threading.Event`) and the parameters from the form,
+Then replace the bodies of `emission`, `excitation` and `lifetime`. Each one is
+a generator:
+
+- it receives the `instrument` returned by `initialize()`, `stop` (a
+  `threading.Event`) and the parameters from the form,
 - it `yield`s the full list of rows measured so far whenever there is new data,
   for example after each wavelength or every few hundred laser pulses,
 - it returns early when `stop.is_set()`.
