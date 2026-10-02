@@ -33,6 +33,10 @@ if [ -d /opt/redpitaya/www/apps ]; then
     rm -f /opt/redpitaya/.spectro-write-test
     rm -rf /opt/redpitaya/www/apps/spectro
     cp -r deploy/rp_app/spectro /opt/redpitaya/www/apps/spectro
+    # The menu only lists apps with a loadable controllerhf.so.
+    gcc -shared -fPIC -o /opt/redpitaya/www/apps/spectro/controllerhf.so \
+        deploy/rp_app/controller_stub.c
+    chmod 755 /opt/redpitaya/www/apps/spectro/controllerhf.so
     sync
     if [ -n "$REMOUNT_RO" ]; then
         mount -o remount,ro /opt/redpitaya
