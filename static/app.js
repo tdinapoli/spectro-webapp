@@ -83,6 +83,16 @@ $("form").onsubmit = async (e) => {
 };
 
 $("stop").onclick = () => api("POST", "/api/stop");
+
+$("initialize").onclick = async () => {
+  $("instrument-error").textContent = "";
+  try {
+    await api("POST", "/api/initialize");
+    poll();
+  } catch (err) {
+    $("instrument-error").textContent = err.message;
+  }
+};
 $("logy").onchange = () => lastStatus && drawPlot(lastStatus);
 
 // ---------- Status polling ----------
@@ -101,9 +111,16 @@ async function poll() {
 
   $("status").textContent = st.status;
   $("status").className = `status ${st.status}`;
-  $("start").disabled = st.status === "running";
-  $("stop").disabled = st.status !== "running";
+  const running = st.status === "running";
+  const ready = st.instrument === "ready";
+  $("start").disabled = running || !ready;
+  $("stop").disabled = !running;
   if (st.error) $("message").textContent = st.error;
+
+  $("instrument").textContent = st.instrument;
+  $("instrument-error").textContent = st.instrument_error || "";
+  $("initialize").textContent = ready ? "Re-initialize" : "Initialize";
+  $("initialize").disabled = running || st.instrument === "initializing";
 
   drawPlot(st);
   if (finished) loadResults();

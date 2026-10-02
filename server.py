@@ -16,25 +16,51 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from measurements import MEASUREMENTS
+from measurements import MEASUREMENTS, initialize
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 SAFE_NAME = re.compile(r"^[\w.-]+\.csv$")
 
 
 class Runner:
-    """Runs one measurement at a time in a background thread."""
+    """Holds the initialized instrument and runs one measurement at a time
+    in a background thread."""
 
     def __init__(self, data_dir):
         self.data_dir = data_dir
         self.lock = threading.Lock()
         self.stop_event = threading.Event()
+        self.instrument = None
+        self.instrument_state = dict(instrument="not initialized", instrument_error=None)
         self.state = dict(status="idle", kind=None, rows=[], error=None, file=None)
 
     def snapshot(self):
         with self.lock:
             # Copy rows: the measurement may still be appending to the same list.
-            return dict(self.state, rows=list(self.state["rows"]))
+            return dict(self.state, rows=list(self.state["rows"]), **self.instrument_state)
+
+    def initialize(self):
+        with self.lock:
+            if self.state["status"] == "running":
+                raise RuntimeError("Can't initialize while a measurement is running.")
+            if self.instrument_state["instrument"] == "initializing":
+                raise RuntimeError("The instrument is already initializing.")
+            self.instrument_state = dict(instrument="initializing", instrument_error=None)
+        threading.Thread(target=self._initialize, daemon=True).start()
+
+    def _initialize(self):
+        try:
+            instrument = initialize()
+        except Exception as e:
+            with self.lock:
+                self.instrument = None
+                self.instrument_state = dict(
+                    instrument="error", instrument_error=f"{type(e).__name__}: {e}"
+                )
+            return
+        with self.lock:
+            self.instrument = instrument
+            self.instrument_state = dict(instrument="ready", instrument_error=None)
 
     def start(self, kind, sample, raw_params):
         if kind not in MEASUREMENTS:
@@ -51,8 +77,10 @@ class Runner:
         with self.lock:
             if self.state["status"] == "running":
                 raise RuntimeError("A measurement is already running.")
+            if self.instrument_state["instrument"] != "ready":
+                raise RuntimeError("Initialize the instrument first.")
             self.stop_event.clear()
-            gen = spec["run"](self.stop_event, **params)
+            gen = spec["run"](self.instrument, self.stop_event, **params)
             self.state = dict(
                 status="running", kind=kind, rows=[], error=None, file=None
             )
@@ -166,6 +194,13 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json({"error": str(e)}, HTTPStatus.CONFLICT)
             except ValueError as e:
                 self.send_json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
+            else:
+                self.send_json({"ok": True})
+        elif self.path == "/api/initialize":
+            try:
+                self.runner.initialize()
+            except RuntimeError as e:
+                self.send_json({"error": str(e)}, HTTPStatus.CONFLICT)
             else:
                 self.send_json({"ok": True})
         elif self.path == "/api/stop":

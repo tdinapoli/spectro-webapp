@@ -84,7 +84,20 @@ button:disabled { opacity: 0.4; cursor: default; }
 #stop { background: var(--danger); }
 .buttons { display: flex; gap: 0.5rem; margin-top: 1rem; }
 
-#message { color: var(--danger); min-height: 1.2em; font-size: 0.9rem; }
+#message, .error { color: var(--danger); font-size: 0.9rem; }
+#message { min-height: 1.2em; }
+.error:empty { display: none; }
+
+.instrument {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
 
 .plot-header { display: flex; justify-content: space-between; align-items: center; }
 .plot-header label { margin: 0; }

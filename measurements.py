@@ -1,14 +1,21 @@
-"""Measurement definitions.
+"""Instrument initialization and measurement definitions.
 
-Each measurement is a generator function that receives a `stop` event plus its
-parameters, and yields the full table of rows measured so far every time new
-data is available. The web server stores the latest yield, shows it live and
+`initialize()` runs when the user presses "Initialize instrument" in the page.
+It should do what the top of your scripts does (FPGA, spectrometer, motors)
+and return whatever object the measurements need. It runs once and the result
+is kept while the server runs; pressing the button again re-initializes.
+
+Each measurement is a generator function that receives that `instrument`, a
+`stop` event and its parameters, and yields the full table of rows measured
+so far every time new data is available. The web server stores the latest yield, shows it live and
 saves it to CSV when the generator finishes (or is stopped).
 
 The functions below are DUMMIES that simulate data. To use the real
 instrument, replace their bodies with calls to your hardware API, keeping the
 same signature and the same "yield rows" behaviour. Check `stop.is_set()`
 between points so the Stop button works.
+
+All of this runs inside the web server process.
 
 To add or change a parameter, edit MEASUREMENTS at the bottom of this file;
 the web form is built from it.
@@ -17,6 +24,12 @@ the web form is built from it.
 import math
 import random
 import time
+
+
+def initialize():
+    """DUMMY: pretend to load the FPGA and home the monochromators."""
+    time.sleep(3)
+    return {"name": "dummy spectrometer"}
 
 
 def wavelengths(start, end, step):
@@ -44,8 +57,8 @@ def fake_peak(wl, center, width=15.0, height=5e4, background=200.0):
     return background + height * math.exp(-0.5 * ((wl - center) / width) ** 2)
 
 
-def emission(stop, excitation_wavelength, starting_wavelength, ending_wavelength,
-             wavelength_step, integration_time):
+def emission(instrument, stop, excitation_wavelength, starting_wavelength,
+             ending_wavelength, wavelength_step, integration_time):
     """Fixed excitation monochromator, sweep the emission monochromator."""
     rows = []
     for wl in wavelengths(starting_wavelength, ending_wavelength, wavelength_step):
@@ -57,8 +70,8 @@ def emission(stop, excitation_wavelength, starting_wavelength, ending_wavelength
         yield rows
 
 
-def excitation(stop, emission_wavelength, starting_wavelength, ending_wavelength,
-               wavelength_step, integration_time):
+def excitation(instrument, stop, emission_wavelength, starting_wavelength,
+               ending_wavelength, wavelength_step, integration_time):
     """Fixed emission monochromator, sweep the excitation monochromator."""
     rows = []
     for wl in wavelengths(starting_wavelength, ending_wavelength, wavelength_step):
@@ -70,8 +83,8 @@ def excitation(stop, emission_wavelength, starting_wavelength, ending_wavelength
         yield rows
 
 
-def lifetime(stop, emission_wavelength, laser_current, frequency, duty_cycle,
-             window, resolution, target_counts, max_repetitions):
+def lifetime(instrument, stop, emission_wavelength, laser_current, frequency,
+             duty_cycle, window, resolution, target_counts, max_repetitions):
     """Pulse the laser and histogram photon arrival times after each pulse.
 
     window is in ms and resolution in us; the time column is saved in us.
