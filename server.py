@@ -135,6 +135,11 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
 
+    def end_headers(self):
+        # Make browsers re-check every file, so an update shows up on reload.
+        self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def log_message(self, fmt, *args):
         if "/api/status" not in self.path:  # don't log the constant polling
             super().log_message(fmt, *args)
