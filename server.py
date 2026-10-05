@@ -31,13 +31,17 @@ class Runner:
         self.lock = threading.Lock()
         self.stop_event = threading.Event()
         self.instrument = None
-        self.instrument_state = dict(instrument="not initialized", instrument_error=None)
+        self.instrument_state = dict(
+            instrument="not initialized", instrument_error=None
+        )
         self.state = dict(status="idle", kind=None, rows=[], error=None, file=None)
 
     def snapshot(self):
         with self.lock:
             # Copy rows: the measurement may still be appending to the same list.
-            return dict(self.state, rows=list(self.state["rows"]), **self.instrument_state)
+            return dict(
+                self.state, rows=list(self.state["rows"]), **self.instrument_state
+            )
 
     def initialize(self):
         with self.lock:
@@ -45,7 +49,9 @@ class Runner:
                 raise RuntimeError("Can't initialize while a measurement is running.")
             if self.instrument_state["instrument"] == "initializing":
                 raise RuntimeError("The instrument is already initializing.")
-            self.instrument_state = dict(instrument="initializing", instrument_error=None)
+            self.instrument_state = dict(
+                instrument="initializing", instrument_error=None
+            )
         threading.Thread(target=self._initialize, daemon=True).start()
 
     def _initialize(self):
@@ -140,9 +146,9 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
-    def log_message(self, fmt, *args):
+    def log_message(self, format, *args):
         if "/api/status" not in self.path:  # don't log the constant polling
-            super().log_message(fmt, *args)
+            super().log_message(format, *args)
 
     def send_json(self, obj, code=HTTPStatus.OK):
         body = json.dumps(obj).encode()
