@@ -13,9 +13,12 @@ fi
 rm -f /opt/.spectro-write-test
 
 mkdir -p /opt/spectro /var/lib/spectro
-cp server.py measurements.py /opt/spectro/
-rm -rf /opt/spectro/static
-cp -r static /opt/spectro/static
+# Copy the package as-is and run it with `python3 -m spectro_webapp` from
+# /opt/spectro: the Red Pitaya has no internet to pip-install build tools.
+rm -rf /opt/spectro/spectro_webapp /opt/spectro/server.py \
+    /opt/spectro/measurements.py /opt/spectro/static
+cp -r src/spectro_webapp /opt/spectro/spectro_webapp
+find /opt/spectro -name __pycache__ -prune -exec rm -rf {} +
 
 cp deploy/spectro.service /etc/systemd/system/spectro.service
 systemctl daemon-reload

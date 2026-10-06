@@ -3,7 +3,7 @@
 Standard library only, so it runs on the Red Pitaya without installing
 anything and without internet access.
 
-    python3 server.py --port 8000 --data ./data
+    python3 -m spectro_webapp --port 8000 --data ./data
 """
 
 import argparse
@@ -16,7 +16,7 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from measurements import MEASUREMENTS, initialize
+from .measurements import MEASUREMENTS, initialize
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 SAFE_NAME = re.compile(r"^[\w.-]+\.csv$")

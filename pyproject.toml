@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "spectro-webapp"
+version = "0.1.0"
+description = "Browser app to run the Red Pitaya spectrofluorometer."
+readme = "README.md"
+authors = [{ name = "Tomas Di Napoli", email = "tomas.dina98@gmail.com" }]
+# The Red Pitaya runs Python 3.10.
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+spectro-webapp = "spectro_webapp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/spectro_webapp"]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64"]
+
+[tool.pixi.dependencies]
+python = "3.10.*"
+
+[tool.pixi.pypi-dependencies]
+spectro-webapp = { path = ".", editable = true }
+
+[tool.pixi.tasks]
+serve = "spectro-webapp --port 8000 --data ./data"
