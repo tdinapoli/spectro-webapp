@@ -285,9 +285,12 @@ function drawPlot(st) {
   $("plot-title").textContent = spec ? `${spec.label} — ${rows.length} points` : "No data";
   if (!spec || rows.length === 0) return;
 
+  // With spec.series, the first column splits the rows into curves (one per
+  // laser current, for example) and x, y are the next two columns.
+  const c = spec.series ? 1 : 0;
   const logy = $("logy").checked;
-  const ys = rows.map((r) => (logy ? Math.log10(Math.max(r[1], 0.5)) : r[1]));
-  const xs = rows.map((r) => r[0]);
+  const ys = rows.map((r) => (logy ? Math.log10(Math.max(r[c + 1], 0.5)) : r[c + 1]));
+  const xs = rows.map((r) => r[c]);
   let [x0, x1] = [Math.min(...xs), Math.max(...xs)];
   let [y0, y1] = [Math.min(...ys), Math.max(...ys)];
   if (x0 === x1) { x0 -= 1; x1 += 1; }
@@ -318,23 +321,41 @@ function drawPlot(st) {
   }
   ctx.textAlign = "center";
   ctx.fillStyle = "#1d2330";
-  ctx.fillText(spec.columns[0], (W + m.l) / 2, H - 8);
+  ctx.fillText(spec.columns[c], (W + m.l) / 2, H - 8);
   ctx.save();
   ctx.translate(14, (H - m.b) / 2);
   ctx.rotate(-Math.PI / 2);
-  ctx.fillText(spec.columns[1], 0, 0);
+  ctx.fillText(spec.columns[c + 1], 0, 0);
   ctx.restore();
 
-  // Data
-  ctx.strokeStyle = "#2563eb";
+  // Data: a new curve starts whenever the series value changes.
   ctx.lineWidth = 1.5;
-  ctx.beginPath();
+  const legend = [];
   rows.forEach((r, i) => {
     const X = px(xs[i]), Y = py(ys[i]);
-    i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y);
+    if (i === 0 || (spec.series && r[0] !== rows[i - 1][0])) {
+      if (i) ctx.stroke();
+      ctx.strokeStyle = COLORS[legend.length % COLORS.length];
+      legend.push(r[0]);
+      ctx.beginPath();
+      ctx.moveTo(X, Y);
+    } else {
+      ctx.lineTo(X, Y);
+    }
   });
   ctx.stroke();
+
+  if (spec.series) {
+    ctx.textAlign = "right";
+    legend.forEach((v, i) => {
+      ctx.fillStyle = COLORS[i % COLORS.length];
+      ctx.fillText(`${spec.columns[0]} = ${fmt(v)}`, W - m.r - 4, m.t + 14 + i * 15);
+    });
+  }
 }
+
+const COLORS = ["#2563eb", "#dc2626", "#16a34a", "#d97706", "#7c3aed", "#0891b2",
+                "#db2777", "#4b5563"];
 
 window.onresize = () => lastStatus && drawPlot(lastStatus.measurement);
 

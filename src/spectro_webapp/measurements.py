@@ -200,6 +200,10 @@ SPECTRUM_PARAMS = [
 ]
 SPECTRUM_COLUMNS = ["wavelength_nm", "counts", "integrated_time_s"]
 
+# label: menu entry. run: the generator. columns: CSV columns; the plot shows
+# the first two. params: the form. log_y: start with a log scale. series: the
+# first column splits the rows into curves (one per laser current, for
+# example), and the plot shows the next two columns.
 MEASUREMENTS = {
     "emission": dict(
         label="Emission spectrum",

@@ -95,6 +95,8 @@ journalctl -u spectro -f
   `{"spectrometer": ..., "laser": ...}` (`None` if not connected). Yield the
   full list of rows so far whenever there's new data, return early when
   `stop.is_set()`, and raise an exception with a clear message for problems.
+  With `series=True`, the first column splits the rows into one plotted curve
+  per value (for sweeps).
 - **An instrument action**: add an `action(...)` to the runner's `actions` in
   `runners.py` and a method with the same name. Its fields become keyword
   arguments.
