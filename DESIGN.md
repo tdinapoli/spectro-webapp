@@ -94,6 +94,9 @@ the app runs on a laptop without it.
   and so on).
 - Apply settings: current (A), frequency (Hz), duty cycle (%). More settings
   may be added later.
+- QCW mode ON / OFF (pulsed or continuous). If the laser is on, it's turned
+  off for the switch and back on (`set_qcw_mode`). Measurements still set
+  the mode they need.
 - Laser ON (`turn_on_laser`, which waits while the laser is temperature
   tripped) and Laser OFF.
 - Readings: output on/off, current, frequency, duty cycle, mode.

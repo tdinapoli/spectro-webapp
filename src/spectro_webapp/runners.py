@@ -201,6 +201,8 @@ class LaserRunner(InstrumentRunner):
             param("frequency", "Frequency", 100, "Hz"),
             param("duty_cycle", "Duty cycle", 10, "%"),
         ], busy="Applying laser settings"),
+        action("qcw_on", "QCW mode ON", busy="Switching the laser to pulsed (QCW) mode"),
+        action("qcw_off", "QCW mode OFF", busy="Switching the laser to continuous mode"),
         action("laser_on", "Laser ON", busy="Turning the laser on"),
         action("laser_off", "Laser OFF", busy="Turning the laser off", style="danger"),
     ]
@@ -232,6 +234,12 @@ class LaserRunner(InstrumentRunner):
 
     def apply(self, laser_current, frequency, duty_cycle):
         apply_laser_settings(self.instrument, laser_current, frequency, duty_cycle)
+
+    def qcw_on(self):
+        set_qcw_mode(self.instrument, True)
+
+    def qcw_off(self):
+        set_qcw_mode(self.instrument, False)
 
     def laser_on(self):
         turn_laser_on(self.instrument)
