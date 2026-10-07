@@ -41,8 +41,11 @@ src/spectro_webapp/
   homing), new tasks are refused with "Busy: …" and the page disables the
   buttons. No hardware locks are needed.
 - **Status never touches hardware.** `/api/status` returns values the worker
-  stored after its last task (wavelengths, laser settings). The only lock
-  protects that Python state, not the devices.
+  stored after its last task (wavelengths, laser settings). During a
+  measurement the worker also reads the instruments about once per second
+  (`READ_INTERVAL`), between points, so the header shows **LASER ON** when a
+  measurement turns the laser on. The only lock protects that Python state,
+  not the devices.
 - **Stop** only sets an event. The measurement checks it between points.
 - **Laser OFF waits** while a measurement runs. That's accepted for now: the
   person running the experiment is next to the laser and can turn it off by

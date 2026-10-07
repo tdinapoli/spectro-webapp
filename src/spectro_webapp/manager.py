@@ -7,7 +7,8 @@ the request and hands over a task, so requests return right away.
 One task runs at a time. While one runs, new tasks are refused with
 "Busy: ..." and the page disables its buttons, so no hardware locks are
 needed. The status the page polls never touches hardware: it's the state the
-worker stored after its last task. self.lock only protects that state.
+worker stored after its last task, or during a measurement, every
+READ_INTERVAL. self.lock only protects that state.
 
 Stop only sets an event, which the measurement checks between points.
 """
@@ -17,11 +18,16 @@ import datetime
 import queue
 import re
 import threading
+import time
 import traceback
 
 from .fields import parse
 from .measurements import MEASUREMENTS
 from .runners import RUNNERS
+
+# s between instrument readings during a measurement, so the page shows the
+# monochromator moving and LASER ON when a measurement turns the laser on.
+READ_INTERVAL = 1.0
 
 
 def error_text(e):
@@ -179,10 +185,15 @@ class Manager:
             }
 
         rows, status, error = [], "done", None
+        last_read = time.monotonic()
         try:
             for rows in spec["run"](instruments, self.stop_event, **params):
                 with self.lock:
                     self.measurement["rows"] = rows
+                if time.monotonic() - last_read >= READ_INTERVAL:
+                    for name in self.runners:
+                        self._refresh(name)
+                    last_read = time.monotonic()
             if self.stop_event.is_set():
                 status = "stopped"
         except Exception as e:
