@@ -218,24 +218,20 @@ def emission_current_sweep(
     yield from current_sweep(laser, stop, currents, measure)
 
 
-def lifetime(
+def prepare_lifetime(
     instruments,
-    stop,
     emission_wavelength,
     laser_current,
     frequency,
     duty_cycle,
     window,
     resolution,
-    target_counts,
-    max_repetitions,
 ):
-    """Histogram of photon arrival times after each laser pulse.
+    """Check the lifetime parameters, set up the laser and the monochromator.
 
     The acquisition triggers on the laser TTL (ch2), so this switches the
-    laser to pulsed (QCW) mode with the form's current, frequency and duty
-    cycle, and turns it on. window is in ms and resolution in us; the time
-    column is in us.
+    laser to pulsed (QCW) mode with the given settings. Returns
+    (spectrometer, laser).
     """
     spec = need(instruments, "spectrometer", "Initialize the spectrometer first.")
     laser = need(instruments, "laser", "Lifetime triggers on the laser: connect it first.")
@@ -249,8 +245,11 @@ def lifetime(
     apply_laser_settings(laser, laser_current, frequency, duty_cycle)
     set_qcw_mode(laser, True)
     spec.goto_wavelength(emission_wavelength)
-    if not laser.ld_output:
-        turn_laser_on(laser)
+    return spec, laser
+
+
+def time_resolved(spec, stop, window, resolution, target_counts, max_repetitions):
+    """Yield the histogram so far, at most every PLOT_INTERVAL."""
 
     def histogram(times, counts):
         return [[round(t * 1e6, 4), c] for t, c in zip(times.tolist(), counts.tolist())]
@@ -268,6 +267,72 @@ def lifetime(
             return
     if pending:  # max_repetitions reached between plot updates
         yield histogram(times, counts)
+
+
+def lifetime(
+    instruments,
+    stop,
+    emission_wavelength,
+    laser_current,
+    frequency,
+    duty_cycle,
+    window,
+    resolution,
+    target_counts,
+    max_repetitions,
+):
+    """Histogram of photon arrival times after each laser pulse.
+
+    Sets the laser to pulsed (QCW) mode with the form's current, frequency
+    and duty cycle, and turns it on. window is in ms and resolution in us;
+    the time column is in us.
+    """
+    spec, laser = prepare_lifetime(
+        instruments,
+        emission_wavelength,
+        laser_current,
+        frequency,
+        duty_cycle,
+        window,
+        resolution,
+    )
+    if not laser.ld_output:
+        turn_laser_on(laser)
+    yield from time_resolved(spec, stop, window, resolution, target_counts,
+                             max_repetitions)
+
+
+def lifetime_current_sweep(
+    instruments,
+    stop,
+    emission_wavelength,
+    current_start,
+    current_end,
+    current_step,
+    frequency,
+    duty_cycle,
+    window,
+    resolution,
+    target_counts,
+    max_repetitions,
+):
+    """One lifetime histogram per laser current, in pulsed (QCW) mode."""
+    currents = current_range(current_start, current_end, current_step)
+    spec, laser = prepare_lifetime(
+        instruments,
+        emission_wavelength,
+        currents[0],
+        frequency,
+        duty_cycle,
+        window,
+        resolution,
+    )
+
+    def measure():
+        return time_resolved(spec, stop, window, resolution, target_counts,
+                             max_repetitions)
+
+    yield from current_sweep(laser, stop, currents, measure)
 
 
 SPECTRUM_PARAMS = [
@@ -334,6 +399,23 @@ MEASUREMENTS = {
             param("resolution", "Bin width", 10, "us"),
             param("target_counts", "Target counts", 20000, "", "int"),
             param("max_repetitions", "Max repetitions", 5000, "", "int"),
+        ],
+    ),
+    "lifetime_current_sweep": dict(
+        label="Lifetime vs laser current",
+        run=lifetime_current_sweep,
+        columns=["current_A", "time_us", "counts"],
+        series=True,
+        log_y=True,
+        params=[param("emission_wavelength", "Emission wavelength", 540, "nm")]
+        + CURRENT_SWEEP_PARAMS
+        + [
+            param("frequency", "Laser frequency", 100, "Hz"),
+            param("duty_cycle", "Laser duty cycle", 10, "%"),
+            param("window", "Acquisition window", 5, "ms"),
+            param("resolution", "Bin width", 10, "us"),
+            param("target_counts", "Target counts per current", 20000, "", "int"),
+            param("max_repetitions", "Max repetitions per current", 5000, "", "int"),
         ],
     ),
 }

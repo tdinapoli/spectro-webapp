@@ -46,6 +46,8 @@ pyproject.toml     package metadata and pixi environment
 - Lifetime triggers on the laser: connect it first. The lifetime form has the
   laser current, frequency and duty cycle; the measurement applies them,
   switches the laser to pulsed (QCW) mode and turns it on.
+- **Lifetime vs laser current** takes one lifetime per laser current, in
+  pulsed mode; target counts and max repetitions apply to each current.
 
 ## Try it on your computer
 

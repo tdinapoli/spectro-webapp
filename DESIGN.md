@@ -132,6 +132,11 @@ the app runs on a laptop without it.
   Its form has the laser current, frequency and duty cycle: it applies them,
   switches to QCW mode and turns the laser on itself (and the manager turns
   it off at the end, as after every measurement).
+- **Lifetime vs laser current** is a lifetime histogram per current, in QCW
+  mode, with the frequency and duty cycle from its form. Target counts and
+  max repetitions apply to each current. It shares `prepare_lifetime` (checks,
+  laser settings, monochromator) and `time_resolved` (the acquisition) with
+  Lifetime.
 - The CSV header records the readings of every instrument as the measurement
   left them, before the laser is turned off (`# laser.output: ON`,
   `# spectrometer.excitation_wavelength: 400`, or `# laser: not connected`).
