@@ -36,6 +36,8 @@ pyproject.toml     package metadata and pixi environment
   is stopped.
 - For an emission spectrum excited by the laser, turn the laser on in its
   panel, switch the lamp off by hand, and run a normal emission spectrum.
+- Emission and excitation spectra switch the laser (if connected) to
+  continuous mode.
 - Lifetime triggers on the laser, so the laser must be on first.
 
 ## Try it on your computer

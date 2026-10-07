@@ -20,7 +20,7 @@ change a parameter, edit it there.
 import time
 
 from .fields import param
-from .runners import check_wavelength
+from .runners import check_wavelength, set_qcw_mode
 
 PLOT_INTERVAL = 0.2  # s between lifetime plot updates (pulses come every few ms)
 
@@ -38,6 +38,12 @@ def check_range(mono, starting_wavelength, ending_wavelength, wavelength_step, n
         raise ValueError("Ending wavelength must be greater than starting wavelength.")
     check_wavelength(mono, starting_wavelength, name)
     check_wavelength(mono, ending_wavelength, name)
+
+
+def continuous_laser(instruments):
+    """Steady-state spectra use the laser (if it's connected) in continuous mode."""
+    if instruments.get("laser") is not None:
+        set_qcw_mode(instruments["laser"], False)
 
 
 def spectrum(
@@ -86,6 +92,7 @@ def emission(
         wavelength_step,
         "emission",
     )
+    continuous_laser(instruments)
     spec.goto_excitation_wavelength(excitation_wavelength)
     yield from spectrum(
         spec,
@@ -117,6 +124,7 @@ def excitation(
         wavelength_step,
         "excitation",
     )
+    continuous_laser(instruments)
     spec.goto_wavelength(emission_wavelength)
     yield from spectrum(
         spec,

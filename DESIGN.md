@@ -111,6 +111,9 @@ the app runs on a laptop without it.
 - **Emission with laser excitation is not its own type.** It's a regular
   emission scan with the laser turned on in the laser panel (and the lamp
   turned off by hand).
+- **Laser mode for spectra.** Emission and excitation spectra switch a
+  connected laser to continuous mode. Switching turns the output off and back
+  on, because the ITC4020 may refuse to change mode with the output on.
 - **Lifetime** triggers on the laser TTL, so it needs the laser connected and
   on. Its laser settings (current, frequency, duty cycle) moved from the form
   to the laser panel.
