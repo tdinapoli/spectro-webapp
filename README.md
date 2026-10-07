@@ -84,7 +84,11 @@ internet). It saves measurements in `/var/lib/spectro`, and starts the
 same two commands again to update. Saved measurements are kept.
 
 The real instruments need `refurbishedPTI` importable by `/usr/bin/python3` on
-the Red Pitaya.
+the Red Pitaya, and the Red Pitaya's `rp` module. systemd doesn't load the
+shell's environment (`/etc/profile.d/redpitaya.sh`), so `spectro.service` sets
+`PYTHONPATH=/opt/redpitaya/lib/python` itself. To check an import the way
+systemd runs it:
+`env -i PYTHONPATH=/opt/redpitaya/lib/python /usr/bin/python3 -c "import rp"`.
 
 Useful commands on the Red Pitaya:
 

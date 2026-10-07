@@ -3,6 +3,9 @@ Description=Spectrofluorometer web app
 After=network.target
 
 [Service]
+# systemd doesn't run /etc/profile.d/redpitaya.sh, which sets this for shells.
+# It's where the Red Pitaya keeps its `rp` module (rp.rp_Init).
+Environment=PYTHONPATH=/opt/redpitaya/lib/python
 ExecStart=/usr/bin/python3 -m spectro_webapp --port 8000 --data /var/lib/spectro
 WorkingDirectory=/opt/spectro
 Restart=on-failure
