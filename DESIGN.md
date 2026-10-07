@@ -111,12 +111,14 @@ the app runs on a laptop without it.
 - **Emission with laser excitation is not its own type.** It's a regular
   emission scan with the laser turned on in the laser panel (and the lamp
   turned off by hand).
-- **Laser mode for spectra.** Emission and excitation spectra switch a
-  connected laser to continuous mode. Switching turns the output off and back
-  on, because the ITC4020 may refuse to change mode with the output on.
-- **Lifetime** triggers on the laser TTL, so it needs the laser connected and
-  on. Its laser settings (current, frequency, duty cycle) moved from the form
-  to the laser panel.
+- **Laser mode is set by the measurement.** Emission and excitation spectra
+  switch a connected laser to continuous mode. Lifetime switches it to pulsed
+  (QCW) mode. Switching turns the output off and back on, because the
+  ITC4020 may refuse to change mode with the output on.
+- **Lifetime** triggers on the laser TTL, so it needs the laser connected.
+  Its form has the laser current, frequency and duty cycle: it applies them,
+  switches to QCW mode and turns the laser on itself (and the manager turns
+  it off at the end, as after every measurement).
 - The CSV header records the readings of every instrument as the measurement
   left them, before the laser is turned off (`# laser.output: ON`,
   `# spectrometer.excitation_wavelength: 400`, or `# laser: not connected`).

@@ -20,7 +20,12 @@ change a parameter, edit it there.
 import time
 
 from .fields import param
-from .runners import check_wavelength, set_qcw_mode
+from .runners import (
+    apply_laser_settings,
+    check_wavelength,
+    set_qcw_mode,
+    turn_laser_on,
+)
 
 PLOT_INTERVAL = 0.2  # s between lifetime plot updates (pulses come every few ms)
 
@@ -141,6 +146,9 @@ def lifetime(
     instruments,
     stop,
     emission_wavelength,
+    laser_current,
+    frequency,
+    duty_cycle,
     window,
     resolution,
     target_counts,
@@ -148,26 +156,25 @@ def lifetime(
 ):
     """Histogram of photon arrival times after each laser pulse.
 
-    The acquisition triggers on the laser TTL (ch2), so the laser must be on
-    in pulsed mode; set its current, frequency and duty cycle in the laser
-    panel. window is in ms and resolution in us; the time column is in us.
+    The acquisition triggers on the laser TTL (ch2), so this switches the
+    laser to pulsed (QCW) mode with the form's current, frequency and duty
+    cycle, and turns it on. window is in ms and resolution in us; the time
+    column is in us.
     """
     spec = need(instruments, "spectrometer", "Initialize the spectrometer first.")
-    laser = need(
-        instruments,
-        "laser",
-        "Lifetime triggers on the laser: connect it and turn it on.",
-    )
-    if not laser.ld_output:
-        raise RuntimeError("Turn the laser on first.")
+    laser = need(instruments, "laser", "Lifetime triggers on the laser: connect it first.")
     if resolution <= 0:
         raise ValueError("Bin width must be positive.")
     if window * 1e3 < resolution:
         raise ValueError("Acquisition window must be longer than the bin width.")
-    if window * 1e-3 > 1 / laser.frequency:
+    if frequency > 0 and window * 1e-3 > 1 / frequency:
         raise ValueError("Acquisition window must be shorter than the laser period.")
     check_wavelength(spec.emission_mono, emission_wavelength, "emission")
+    apply_laser_settings(laser, laser_current, frequency, duty_cycle)
+    set_qcw_mode(laser, True)
     spec.goto_wavelength(emission_wavelength)
+    if not laser.ld_output:
+        turn_laser_on(laser)
 
     def histogram(times, counts):
         return [[round(t * 1e6, 4), c] for t, c in zip(times.tolist(), counts.tolist())]
@@ -223,6 +230,9 @@ MEASUREMENTS = {
         log_y=True,
         params=[
             param("emission_wavelength", "Emission wavelength", 540, "nm"),
+            param("laser_current", "Laser current", 0.02, "A"),
+            param("frequency", "Laser frequency", 100, "Hz"),
+            param("duty_cycle", "Laser duty cycle", 10, "%"),
             param("window", "Acquisition window", 5, "ms"),
             param("resolution", "Bin width", 10, "us"),
             param("target_counts", "Target counts", 20000, "", "int"),

@@ -38,7 +38,9 @@ pyproject.toml     package metadata and pixi environment
   panel, switch the lamp off by hand, and run a normal emission spectrum.
 - Emission and excitation spectra switch the laser (if connected) to
   continuous mode.
-- Lifetime triggers on the laser, so the laser must be on first.
+- Lifetime triggers on the laser: connect it first. The lifetime form has the
+  laser current, frequency and duty cycle; the measurement applies them,
+  switches the laser to pulsed (QCW) mode and turns it on.
 
 ## Try it on your computer
 
