@@ -56,9 +56,36 @@ main {
 
 .results { grid-column: 1 / -1; }
 
-nav { display: flex; gap: 0.25rem; margin-bottom: 1rem; flex-wrap: wrap; }
-nav button { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
-nav button.active { background: var(--accent); color: white; border-color: var(--accent); }
+#task { color: var(--muted); font-size: 0.9rem; }
+#badges { margin-left: auto; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.badge {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.badge.ready { border-color: var(--ok); color: var(--ok); }
+.badge.error { border-color: var(--danger); color: var(--danger); }
+.badge.laser-on {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: white;
+  font-weight: bold;
+}
+
+.tabs { display: flex; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.tabs button {
+  flex: 1;
+  background: none;
+  color: var(--muted);
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+}
+.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab[hidden] { display: none; }
+
+select { width: 100%; padding: 0.35rem; margin-bottom: 0.75rem; font-size: 0.9rem; }
 
 label {
   display: flex;
@@ -70,6 +97,7 @@ label {
 }
 label input[type=text], label input[type=number] { width: 9rem; padding: 0.3rem; }
 .unit { color: var(--muted); width: 2rem; font-size: 0.8rem; }
+label > span:last-child { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; }
 
 button {
   padding: 0.45rem 1rem;
@@ -81,23 +109,35 @@ button {
   font-size: 0.9rem;
 }
 button:disabled { opacity: 0.4; cursor: default; }
-#stop { background: var(--danger); }
-.buttons { display: flex; gap: 0.5rem; margin-top: 1rem; }
+button.danger { background: var(--danger); }
+.buttons { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
 
-#message, .error { color: var(--danger); font-size: 0.9rem; }
-#message { min-height: 1.2em; }
+.error { color: var(--danger); font-size: 0.9rem; }
 .error:empty { display: none; }
 
-.instrument {
+.instrument-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 0.5rem;
-  padding-bottom: 0.75rem;
   margin-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border);
   font-size: 0.9rem;
 }
+.readings { margin-bottom: 0.75rem; }
+.readings td:last-child { text-align: right; }
+
+.action {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.action label { flex: 1; margin: 0; }
+.action label input[type=number] { width: 5rem; }
+.action button { padding: 0.3rem 0.8rem; }
+.action.multi { flex-direction: column; align-items: stretch; gap: 0; }
+.action.multi label { margin-bottom: 0.5rem; }
+.action.multi button { align-self: flex-end; }
 
 .plot-header { display: flex; justify-content: space-between; align-items: center; }
 .plot-header label { margin: 0; }

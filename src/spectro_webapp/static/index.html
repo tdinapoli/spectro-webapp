@@ -10,25 +10,40 @@
   <header>
     <h1>Spectrofluorometer</h1>
     <span id="status" class="status idle">idle</span>
+    <span id="task"></span>
+    <span id="badges"></span>
   </header>
 
   <main>
     <section class="panel">
-      <div class="instrument">
-        <span>Instrument: <strong id="instrument">not initialized</strong></span>
-        <button id="initialize" type="button">Initialize</button>
-      </div>
-      <p id="instrument-error" class="error"></p>
-      <nav id="tabs"></nav>
-      <form id="form">
-        <label>Sample name <input id="sample" type="text" placeholder="optional"></label>
-        <div id="fields"></div>
-        <div class="buttons">
-          <button id="start" type="submit">Start</button>
-          <button id="stop" type="button" disabled>Stop</button>
+      <nav class="tabs">
+        <button type="button" data-tab="instruments">Instruments</button>
+        <button type="button" data-tab="measurements">Measurements</button>
+      </nav>
+
+      <div id="tab-instruments" class="tab">
+        <select id="instrument-select"></select>
+        <div class="instrument-head">
+          <span>Status: <strong id="instrument-status"></strong></span>
+          <button id="connect" type="button"></button>
         </div>
-        <p id="message"></p>
-      </form>
+        <p id="instrument-error" class="error"></p>
+        <table class="readings"><tbody id="readings"></tbody></table>
+        <div id="actions"></div>
+      </div>
+
+      <div id="tab-measurements" class="tab">
+        <select id="measurement-select"></select>
+        <form id="form">
+          <label>Sample name <input id="sample" type="text" placeholder="optional"></label>
+          <div id="fields"></div>
+          <div class="buttons">
+            <button id="start" type="submit">Start</button>
+            <button id="stop" type="button" class="danger" disabled>Stop</button>
+          </div>
+          <p id="message" class="error"></p>
+        </form>
+      </div>
     </section>
 
     <section class="panel plot-panel">

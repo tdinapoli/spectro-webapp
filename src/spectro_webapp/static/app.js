@@ -1,10 +1,17 @@
 // Spectrofluorometer web app frontend. No libraries, so it works offline.
+//
+// The forms and instrument panels are built from /api/config (MEASUREMENTS
+// and the runners' declarations in Python). /api/status is polled every
+// 500 ms and only updates values and enabled buttons, so typed values stay.
 
 const $ = (id) => document.getElementById(id);
 let config = {};
-let currentKind = null;
 let lastStatus = null;
-const formValues = {}; // remembered values per measurement type
+let currentInstrument = null;
+let currentKind = null;
+let requestError = ""; // error from the last instrument request, if any
+const formValues = {}; // remembered field values: formValues[kind][param]
+const actionValues = {}; // actionValues[instrument][action][param]
 
 async function api(method, path, body) {
   const res = await fetch(path, {
@@ -17,36 +24,20 @@ async function api(method, path, body) {
   return data;
 }
 
-// ---------- Form ----------
-
-function buildTabs() {
-  const tabs = $("tabs");
-  tabs.innerHTML = "";
-  for (const [kind, spec] of Object.entries(config)) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.textContent = spec.label;
-    b.onclick = () => selectKind(kind);
-    b.dataset.kind = kind;
-    tabs.appendChild(b);
-  }
+function defaults(params) {
+  return Object.fromEntries(params.map((p) => [p.name, p.default]));
 }
 
-function saveFormValues() {
-  if (!currentKind) return;
-  for (const input of $("fields").querySelectorAll("input")) {
-    formValues[currentKind][input.name] = input.value;
-  }
+function option(value, text) {
+  const o = document.createElement("option");
+  o.value = value;
+  o.textContent = text;
+  return o;
 }
 
-function selectKind(kind) {
-  saveFormValues();
-  currentKind = kind;
-  for (const b of $("tabs").children) b.classList.toggle("active", b.dataset.kind === kind);
-
-  const fields = $("fields");
-  fields.innerHTML = "";
-  for (const p of config[kind].params) {
+// Number fields for `params`; edits are stored in `values`.
+function buildFields(container, params, values) {
+  for (const p of params) {
     const label = document.createElement("label");
     label.innerHTML = `<span>${p.label}</span>`;
     const span = document.createElement("span");
@@ -55,19 +46,160 @@ function selectKind(kind) {
     input.step = "any";
     input.name = p.name;
     input.required = true;
-    input.value = formValues[kind][p.name];
+    input.value = values[p.name];
+    input.oninput = () => (values[p.name] = input.value);
     const unit = document.createElement("span");
     unit.className = "unit";
     unit.textContent = p.unit;
     span.append(input, unit);
     label.appendChild(span);
-    fields.appendChild(label);
+    container.appendChild(label);
   }
 }
 
+function fmtValue(v) {
+  if (v === null || v === undefined) return "unknown";
+  return typeof v === "number" ? +v.toPrecision(6) + "" : v;
+}
+
+// ---------- Tabs ----------
+
+function selectTab(tab) {
+  for (const b of document.querySelectorAll(".tabs button")) {
+    b.classList.toggle("active", b.dataset.tab === tab);
+  }
+  for (const t of document.querySelectorAll(".tab")) {
+    t.hidden = t.id !== `tab-${tab}`;
+  }
+}
+for (const b of document.querySelectorAll(".tabs button")) {
+  b.onclick = () => selectTab(b.dataset.tab);
+}
+
+// ---------- Instruments ----------
+
+function selectInstrument(name) {
+  currentInstrument = name;
+  const spec = config.instruments[name];
+  requestError = "";
+  $("connect").textContent = spec.connect_label;
+
+  const actions = $("actions");
+  actions.innerHTML = "";
+  let buttonRow = null; // consecutive actions without fields share a row
+  for (const a of spec.actions) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = a.label;
+    button.dataset.action = a.name;
+    if (a.style) button.className = a.style;
+    button.onclick = () => runAction(name, a);
+    if (a.params.length) {
+      buttonRow = null;
+      const row = document.createElement("div");
+      row.className = a.params.length > 1 ? "action multi" : "action";
+      buildFields(row, a.params, actionValues[name][a.name]);
+      row.appendChild(button);
+      actions.appendChild(row);
+    } else {
+      if (!buttonRow) {
+        buttonRow = document.createElement("div");
+        buttonRow.className = "buttons";
+        actions.appendChild(buttonRow);
+      }
+      buttonRow.appendChild(button);
+    }
+  }
+  if (lastStatus) updateInstrumentPanel(lastStatus);
+}
+
+async function instrumentRequest(path, body) {
+  requestError = "";
+  try {
+    await api("POST", path, body);
+  } catch (err) {
+    requestError = err.message;
+  }
+  poll();
+}
+
+function runAction(name, action) {
+  instrumentRequest(`/api/instruments/${name}/${action.name}`, {
+    params: actionValues[name][action.name],
+  });
+}
+
+$("connect").onclick = () => instrumentRequest(`/api/instruments/${currentInstrument}/connect`);
+
+$("instrument-select").onchange = (e) => selectInstrument(e.target.value);
+
+function updateInstrumentPanel(st) {
+  const name = currentInstrument;
+  const spec = config.instruments[name];
+  const inst = st.instruments[name];
+  const ready = inst.status === "ready";
+  const busy = st.task !== null;
+
+  $("instrument-status").textContent = inst.status;
+  $("instrument-error").textContent = requestError || inst.error || "";
+  $("connect").disabled = busy;
+  for (const b of $("actions").querySelectorAll("button")) b.disabled = busy || !ready;
+
+  const tbody = $("readings");
+  tbody.innerHTML = "";
+  if (!ready) return;
+  for (const r of spec.readings) {
+    const tr = document.createElement("tr");
+    const v = inst.values[r.name];
+    const unit = v === null || v === undefined ? "" : r.unit;
+    tr.innerHTML = `<td>${r.label}</td><td>${fmtValue(v)} ${unit}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+// When an instrument becomes ready, fill its action fields that have a
+// reading of the same name (laser current, frequency, ...) with the values
+// the instrument actually has.
+function prefillFromReadings(name, values) {
+  for (const a of config.instruments[name].actions) {
+    for (const p of a.params) {
+      const v = values[p.name];
+      if (typeof v === "number") actionValues[name][a.name][p.name] = v;
+    }
+  }
+  if (name === currentInstrument) selectInstrument(name);
+}
+
+function updateBadges(st) {
+  const badges = $("badges");
+  badges.innerHTML = "";
+  for (const [name, spec] of Object.entries(config.instruments)) {
+    const inst = st.instruments[name];
+    const span = document.createElement("span");
+    span.className = `badge ${inst.status}`;
+    span.textContent = `${spec.label}: ${inst.status}`;
+    if (name === "laser" && inst.status === "ready") {
+      const on = inst.values.output === "ON";
+      span.textContent = on ? "LASER ON" : `${spec.label}: off`;
+      if (on) span.className = "badge laser-on";
+    }
+    badges.appendChild(span);
+  }
+}
+
+// ---------- Measurements ----------
+
+function selectKind(kind) {
+  currentKind = kind;
+  const fields = $("fields");
+  fields.innerHTML = "";
+  buildFields(fields, config.measurements[kind].params, formValues[kind]);
+}
+
+$("measurement-select").onchange = (e) => selectKind(e.target.value);
+
 $("form").onsubmit = async (e) => {
   e.preventDefault();
-  saveFormValues();
   $("message").textContent = "";
   try {
     await api("POST", "/api/start", {
@@ -75,7 +207,7 @@ $("form").onsubmit = async (e) => {
       sample: $("sample").value,
       params: formValues[currentKind],
     });
-    $("logy").checked = !!config[currentKind].log_y;
+    $("logy").checked = !!config.measurements[currentKind].log_y;
     poll();
   } catch (err) {
     $("message").textContent = err.message;
@@ -83,17 +215,7 @@ $("form").onsubmit = async (e) => {
 };
 
 $("stop").onclick = () => api("POST", "/api/stop");
-
-$("initialize").onclick = async () => {
-  $("instrument-error").textContent = "";
-  try {
-    await api("POST", "/api/initialize");
-    poll();
-  } catch (err) {
-    $("instrument-error").textContent = err.message;
-  }
-};
-$("logy").onchange = () => lastStatus && drawPlot(lastStatus);
+$("logy").onchange = () => lastStatus && drawPlot(lastStatus.measurement);
 
 // ---------- Status polling ----------
 
@@ -106,23 +228,27 @@ async function poll() {
     $("status").className = "status error";
     return;
   }
-  const finished = lastStatus && lastStatus.status === "running" && st.status !== "running";
+  const prev = lastStatus;
   lastStatus = st;
+  const m = st.measurement;
+  const running = m.status === "running";
+  const finished = prev && prev.measurement.status === "running" && !running;
 
-  $("status").textContent = st.status;
-  $("status").className = `status ${st.status}`;
-  const running = st.status === "running";
-  const ready = st.instrument === "ready";
-  $("start").disabled = running || !ready;
+  $("status").textContent = m.status;
+  $("status").className = `status ${m.status}`;
+  $("task").textContent = st.task && !running ? `Busy: ${st.task}` : "";
+  $("start").disabled = st.task !== null;
   $("stop").disabled = !running;
-  if (st.error) $("message").textContent = st.error;
+  if (m.error) $("message").textContent = m.error;
 
-  $("instrument").textContent = st.instrument;
-  $("instrument-error").textContent = st.instrument_error || "";
-  $("initialize").textContent = ready ? "Re-initialize" : "Initialize";
-  $("initialize").disabled = running || st.instrument === "initializing";
-
-  drawPlot(st);
+  for (const [name, inst] of Object.entries(st.instruments)) {
+    if (inst.status === "ready" && (!prev || prev.instruments[name].status !== "ready")) {
+      prefillFromReadings(name, inst.values);
+    }
+  }
+  updateBadges(st);
+  updateInstrumentPanel(st);
+  drawPlot(m);
   if (finished) loadResults();
 }
 
@@ -155,7 +281,7 @@ function drawPlot(st) {
   ctx.clearRect(0, 0, W, H);
 
   const rows = st.rows || [];
-  const spec = config[st.kind];
+  const spec = config.measurements[st.kind];
   $("plot-title").textContent = spec ? `${spec.label} — ${rows.length} points` : "No data";
   if (!spec || rows.length === 0) return;
 
@@ -210,7 +336,7 @@ function drawPlot(st) {
   ctx.stroke();
 }
 
-window.onresize = () => lastStatus && drawPlot(lastStatus);
+window.onresize = () => lastStatus && drawPlot(lastStatus.measurement);
 
 // ---------- Saved results ----------
 
@@ -236,11 +362,17 @@ async function loadResults() {
 
 (async () => {
   config = await api("GET", "/api/config");
-  for (const [kind, spec] of Object.entries(config)) {
-    formValues[kind] = Object.fromEntries(spec.params.map((p) => [p.name, p.default]));
+  for (const [kind, spec] of Object.entries(config.measurements)) {
+    formValues[kind] = defaults(spec.params);
+    $("measurement-select").appendChild(option(kind, spec.label));
   }
-  buildTabs();
-  selectKind(Object.keys(config)[0]);
+  for (const [name, spec] of Object.entries(config.instruments)) {
+    actionValues[name] = Object.fromEntries(spec.actions.map((a) => [a.name, defaults(a.params)]));
+    $("instrument-select").appendChild(option(name, spec.label));
+  }
+  selectTab("instruments");
+  selectInstrument(Object.keys(config.instruments)[0]);
+  selectKind(Object.keys(config.measurements)[0]);
   loadResults();
   poll();
   setInterval(poll, 500);

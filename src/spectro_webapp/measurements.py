@@ -1,157 +1,212 @@
-"""Instrument initialization and measurement definitions.
+"""Measurement definitions.
 
-`initialize()` runs when the user presses "Initialize instrument" in the page.
-It should do what the top of your scripts does (FPGA, spectrometer, motors)
-and return whatever object the measurements need. It runs once and the result
-is kept while the server runs; pressing the button again re-initializes.
+Each measurement is a generator function run(instruments, stop, **params):
 
-Each measurement is a generator function that receives that `instrument`, a
-`stop` event and its parameters, and yields the full table of rows measured
-so far every time new data is available. The web server stores the latest yield, shows it live and
-saves it to CSV when the generator finishes (or is stopped).
+- instruments is {"spectrometer": ..., "laser": ...}, with the refurbishedPTI
+  objects (or dummies), or None for an instrument that isn't connected,
+- stop is a threading.Event set by the Stop button,
+- params are the values from the form, already converted to numbers.
 
-The functions below are DUMMIES that simulate data. To use the real
-instrument, replace their bodies with calls to your hardware API, keeping the
-same signature and the same "yield rows" behaviour. Check `stop.is_set()`
-between points so the Stop button works.
+It yields the full list of rows measured so far whenever there's new data,
+and returns early when stop.is_set(). The Manager shows the rows live, saves
+them to CSV when the generator ends, and then turns the laser off. Raising an
+exception (for example ValueError for bad parameters) shows its message in
+the page.
 
-All of this runs inside the web server process.
-
-To add or change a parameter, edit MEASUREMENTS at the bottom of this file;
-the web form is built from it.
+The form is built from MEASUREMENTS at the bottom of this file: to add or
+change a parameter, edit it there.
 """
 
-import math
-import random
 import time
 
+from .fields import param
+from .runners import check_wavelength
 
-def initialize():
-    """DUMMY: pretend to load the FPGA and home the monochromators."""
-    time.sleep(3)
-    return {"name": "dummy spectrometer"}
+PLOT_INTERVAL = 0.2  # s between lifetime plot updates (pulses come every few ms)
 
 
-def wavelengths(start, end, step):
-    if step <= 0:
+def need(instruments, name, message):
+    if instruments.get(name) is None:
+        raise RuntimeError(message)
+    return instruments[name]
+
+
+def check_range(mono, starting_wavelength, ending_wavelength, wavelength_step, name):
+    if wavelength_step <= 0:
         raise ValueError("Wavelength step must be positive.")
-    if end <= start:
+    if ending_wavelength <= starting_wavelength:
         raise ValueError("Ending wavelength must be greater than starting wavelength.")
-    n = int(round((end - start) / step))
-    return [round(start + i * step, 3) for i in range(n + 1)]
+    check_wavelength(mono, starting_wavelength, name)
+    check_wavelength(mono, ending_wavelength, name)
 
 
-def poisson(lam):
-    if lam < 30:
-        # Knuth's algorithm, fine for small means.
-        limit, k, p = math.exp(-lam), 0, 1.0
-        while True:
-            p *= random.random()
-            if p <= limit:
-                return k
-            k += 1
-    return max(0, round(random.gauss(lam, math.sqrt(lam))))
+def spectrum(
+    spec,
+    stop,
+    mono,
+    integration_time,
+    starting_wavelength,
+    ending_wavelength,
+    wavelength_step,
+):
+    if integration_time <= 0:
+        raise ValueError("Integration time must be positive.")
+    rows = []
+    for point in spec.yield_spectrum(
+        mono, integration_time, starting_wavelength, ending_wavelength, wavelength_step
+    ):
+        rows.append(
+            [
+                float(point["wavelength"]),
+                int(point["counts"]),
+                float(point["integrated_time"]),
+            ]
+        )
+        yield rows
+        if stop.is_set():
+            return
 
 
-def fake_peak(wl, center, width=15.0, height=5e4, background=200.0):
-    return background + height * math.exp(-0.5 * ((wl - center) / width) ** 2)
-
-
-def emission(instrument, stop, excitation_wavelength, starting_wavelength,
-             ending_wavelength, wavelength_step, integration_time):
+def emission(
+    instruments,
+    stop,
+    excitation_wavelength,
+    starting_wavelength,
+    ending_wavelength,
+    wavelength_step,
+    integration_time,
+):
     """Fixed excitation monochromator, sweep the emission monochromator."""
-    rows = []
-    for wl in wavelengths(starting_wavelength, ending_wavelength, wavelength_step):
-        if stop.is_set():
-            return
-        time.sleep(integration_time)  # real code: move mono + integrate
-        counts = poisson(integration_time * fake_peak(wl, excitation_wavelength + 60))
-        rows.append([wl, counts])
-        yield rows
+    spec = need(instruments, "spectrometer", "Initialize the spectrometer first.")
+    check_wavelength(spec.excitation_mono, excitation_wavelength, "excitation")
+    check_range(
+        spec.emission_mono,
+        starting_wavelength,
+        ending_wavelength,
+        wavelength_step,
+        "emission",
+    )
+    spec.goto_excitation_wavelength(excitation_wavelength)
+    yield from spectrum(
+        spec,
+        stop,
+        spec.emission_mono,
+        integration_time,
+        starting_wavelength,
+        ending_wavelength,
+        wavelength_step,
+    )
 
 
-def excitation(instrument, stop, emission_wavelength, starting_wavelength,
-               ending_wavelength, wavelength_step, integration_time):
+def excitation(
+    instruments,
+    stop,
+    emission_wavelength,
+    starting_wavelength,
+    ending_wavelength,
+    wavelength_step,
+    integration_time,
+):
     """Fixed emission monochromator, sweep the excitation monochromator."""
-    rows = []
-    for wl in wavelengths(starting_wavelength, ending_wavelength, wavelength_step):
-        if stop.is_set():
-            return
-        time.sleep(integration_time)
-        counts = poisson(integration_time * fake_peak(wl, emission_wavelength - 60))
-        rows.append([wl, counts])
-        yield rows
+    spec = need(instruments, "spectrometer", "Initialize the spectrometer first.")
+    check_wavelength(spec.emission_mono, emission_wavelength, "emission")
+    check_range(
+        spec.excitation_mono,
+        starting_wavelength,
+        ending_wavelength,
+        wavelength_step,
+        "excitation",
+    )
+    spec.goto_wavelength(emission_wavelength)
+    yield from spectrum(
+        spec,
+        stop,
+        spec.excitation_mono,
+        integration_time,
+        starting_wavelength,
+        ending_wavelength,
+        wavelength_step,
+    )
 
 
-def lifetime(instrument, stop, emission_wavelength, laser_current, frequency,
-             duty_cycle, window, resolution, target_counts, max_repetitions):
-    """Pulse the laser and histogram photon arrival times after each pulse.
+def lifetime(
+    instruments,
+    stop,
+    emission_wavelength,
+    window,
+    resolution,
+    target_counts,
+    max_repetitions,
+):
+    """Histogram of photon arrival times after each laser pulse.
 
-    window is in ms and resolution in us; the time column is saved in us.
+    The acquisition triggers on the laser TTL (ch2), so the laser must be on
+    in pulsed mode; set its current, frequency and duty cycle in the laser
+    panel. window is in ms and resolution in us; the time column is in us.
     """
-    if window * 1e-3 > 1 / frequency:
-        raise ValueError("Window must be shorter than the laser period.")
+    spec = need(instruments, "spectrometer", "Initialize the spectrometer first.")
+    laser = need(
+        instruments,
+        "laser",
+        "Lifetime triggers on the laser: connect it and turn it on.",
+    )
+    if not laser.ld_output:
+        raise RuntimeError("Turn the laser on first.")
     if resolution <= 0:
-        raise ValueError("Resolution must be positive.")
-    bins = int(window * 1e3 / resolution)
-    if bins < 1:
-        raise ValueError("Window must be longer than the resolution.")
+        raise ValueError("Bin width must be positive.")
+    if window * 1e3 < resolution:
+        raise ValueError("Acquisition window must be longer than the bin width.")
+    if window * 1e-3 > 1 / laser.frequency:
+        raise ValueError("Acquisition window must be shorter than the laser period.")
+    check_wavelength(spec.emission_mono, emission_wavelength, "emission")
+    spec.goto_wavelength(emission_wavelength)
 
-    tau_us = 1000.0  # fake 1 ms lifetime
-    photons_per_pulse = 5 * laser_current / 0.1
-    counts = [0] * bins
-    total = 0
-    reps_per_update = max(1, int(0.2 * frequency))  # update the plot ~5 times/s
+    def histogram(times, counts):
+        return [[round(t * 1e6, 4), c] for t, c in zip(times.tolist(), counts.tolist())]
 
-    for rep in range(1, max_repetitions + 1):
-        if stop.is_set():
+    last_yield, pending = 0.0, False
+    for times, counts, _ in spec.yield_time_resolved(
+        window * 1e-3, resolution * 1e-6, max_repetitions
+    ):
+        pending = True
+        done = counts.sum() >= target_counts or stop.is_set()
+        if done or time.monotonic() - last_yield >= PLOT_INTERVAL:
+            yield histogram(times, counts)
+            last_yield, pending = time.monotonic(), False
+        if done:
             return
-        for _ in range(poisson(photons_per_pulse)):
-            if random.random() < 0.05:  # background photon
-                t = random.uniform(0, window * 1e3)
-            else:
-                t = random.expovariate(1 / tau_us)
-            i = int(t / resolution)
-            if i < bins:
-                counts[i] += 1
-                total += 1
-        if rep % reps_per_update == 0 or total >= target_counts:
-            time.sleep(reps_per_update / frequency)
-            yield [[round(i * resolution, 3), c] for i, c in enumerate(counts)]
-        if total >= target_counts:
-            return
-    yield [[round(i * resolution, 3), c] for i, c in enumerate(counts)]
+    if pending:  # max_repetitions reached between plot updates
+        yield histogram(times, counts)
 
 
-def param(name, label, default, unit="", type="float"):
-    return dict(name=name, label=label, default=default, unit=unit, type=type)
-
-
-SPECTRUM_RANGE = [
-    param("starting_wavelength", "Starting wavelength", 500, "nm"),
-    param("ending_wavelength", "Ending wavelength", 700, "nm"),
+SPECTRUM_PARAMS = [
     param("wavelength_step", "Wavelength step", 1, "nm"),
     param("integration_time", "Integration time", 0.1, "s"),
 ]
+SPECTRUM_COLUMNS = ["wavelength_nm", "counts", "integrated_time_s"]
 
 MEASUREMENTS = {
     "emission": dict(
         label="Emission spectrum",
         run=emission,
-        columns=["wavelength_nm", "counts"],
-        params=[param("excitation_wavelength", "Excitation wavelength", 400, "nm")]
-        + SPECTRUM_RANGE,
+        columns=SPECTRUM_COLUMNS,
+        params=[
+            param("excitation_wavelength", "Excitation wavelength", 420, "nm"),
+            param("starting_wavelength", "Starting wavelength", 470, "nm"),
+            param("ending_wavelength", "Ending wavelength", 650, "nm"),
+        ]
+        + SPECTRUM_PARAMS,
     ),
     "excitation": dict(
         label="Excitation spectrum",
         run=excitation,
-        columns=["wavelength_nm", "counts"],
-        params=[param("emission_wavelength", "Emission wavelength", 600, "nm")]
-        + [
+        columns=SPECTRUM_COLUMNS,
+        params=[
+            param("emission_wavelength", "Emission wavelength", 540, "nm"),
             param("starting_wavelength", "Starting wavelength", 300, "nm"),
-            param("ending_wavelength", "Ending wavelength", 550, "nm"),
+            param("ending_wavelength", "Ending wavelength", 500, "nm"),
         ]
-        + SPECTRUM_RANGE[2:],
+        + SPECTRUM_PARAMS,
     ),
     "lifetime": dict(
         label="Lifetime",
@@ -159,10 +214,7 @@ MEASUREMENTS = {
         columns=["time_us", "counts"],
         log_y=True,
         params=[
-            param("emission_wavelength", "Emission wavelength", 600, "nm"),
-            param("laser_current", "Laser current", 0.1, "A"),
-            param("frequency", "Pulse frequency", 100, "Hz"),
-            param("duty_cycle", "Duty cycle", 50, "%"),
+            param("emission_wavelength", "Emission wavelength", 540, "nm"),
             param("window", "Acquisition window", 5, "ms"),
             param("resolution", "Bin width", 10, "us"),
             param("target_counts", "Target counts", 20000, "", "int"),

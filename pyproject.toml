@@ -10,7 +10,9 @@ readme = "README.md"
 authors = [{ name = "Tomas Di Napoli", email = "tomas.dina98@gmail.com" }]
 # The Red Pitaya runs Python 3.10.
 requires-python = ">=3.10"
-dependencies = []
+# numpy is only needed by the dummy instruments (--dummy); on the Red Pitaya
+# it comes with refurbishedPTI.
+dependencies = ["numpy"]
 
 [project.scripts]
 spectro-webapp = "spectro_webapp.server:main"
@@ -24,9 +26,11 @@ platforms = ["linux-64", "osx-arm64"]
 
 [tool.pixi.dependencies]
 python = "3.10.*"
+numpy = "*"
 
 [tool.pixi.pypi-dependencies]
 spectro-webapp = { path = ".", editable = true }
 
 [tool.pixi.tasks]
 serve = "spectro-webapp --port 8000 --data ./data"
+serve-dummy = "spectro-webapp --port 8000 --data ./data --dummy"

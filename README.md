@@ -1,31 +1,59 @@
 # Spectrofluorometer web app
 
-Minimal browser app to take emission spectra, excitation spectra and lifetimes
-on the Red Pitaya. Python standard library only, and it works without internet
-(no CDNs).
+Minimal browser app to control the spectrometer and the ITC4020 laser on the
+Red Pitaya, and to take emission spectra, excitation spectra and lifetimes. It
+uses the Python standard library plus refurbishedPTI (or simulated
+instruments), and it works without internet (no CDNs).
 
 ```
 src/spectro_webapp/
-  server.py        HTTP server + runs one measurement at a time, saves CSVs
-  measurements.py  measurement functions (currently DUMMIES) and their parameters
+  server.py        HTTP only: routes requests to the Manager
+  manager.py       Manager: owns the instruments, runs one task at a time, saves CSVs
+  runners.py       one runner per instrument: its panel's actions and readings
+  measurements.py  measurement generators and their parameters (MEASUREMENTS)
+  fields.py        declarations the page builds its forms from
+  dummies.py       simulated instruments with the refurbishedPTI API
+  simulation.py    synthetic sample that produces the dummies' photons
   static/          web page (HTML/CSS/JS, plot drawn on a canvas)
 deploy/            systemd service, install script, Red Pitaya app-menu tile
+DESIGN.md          how the pieces fit together, and why
 pyproject.toml     package metadata and pixi environment
 ```
+
+## Using the page
+
+- **Instruments** tab: choose the spectrometer or the laser in the dropdown.
+  - Spectrometer: Initialize, go to an excitation/emission wavelength, home
+    each monochromator, or set the current wavelength without moving.
+  - Laser: Connect, apply current/frequency/duty cycle, Laser ON/OFF.
+- **Measurements** tab: choose emission, excitation or lifetime in the
+  dropdown, fill in the form, and press Start.
+- The header always shows both instruments. **LASER ON** is red.
+- One thing runs at a time. While a measurement, a homing or anything else
+  runs, the other buttons are disabled, including Laser OFF: use the
+  instrument's own switch if you need it off right away.
+- **After every measurement the laser is turned off**, also when it fails or
+  is stopped.
+- For an emission spectrum excited by the laser, turn the laser on in its
+  panel, switch the lamp off by hand, and run a normal emission spectrum.
+- Lifetime triggers on the laser, so the laser must be on first.
 
 ## Try it on your computer
 
 Dependencies are managed with [pixi](https://pixi.sh). It installs the package
-in editable mode:
+in editable mode. With simulated instruments:
 
 ```bash
-pixi run serve
+pixi run serve-dummy
 ```
 
-That runs `spectro-webapp --port 8000 --data ./data`. Without pixi, use
-`pip install -e .` and the same command, or `python -m spectro_webapp`.
+Open http://localhost:8000. `pixi run serve` runs with the real instruments,
+which needs refurbishedPTI (connecting shows an error without it). Without
+pixi, use `pip install -e .` and `spectro-webapp --dummy`, or
+`python -m spectro_webapp --dummy`.
 
-Open http://localhost:8000.
+The dummies take realistic time: about 20 ms per motor step (0.5 nm), so
+moving a monochromator 100 nm takes 4 s.
 
 ## Install on the Red Pitaya
 
@@ -40,9 +68,11 @@ ssh root@rp.lan sh /tmp/spectro-webapp/deploy/install.sh
 This copies the `spectro_webapp` package to `/opt/spectro` and runs it with
 `python3 -m spectro_webapp` (no pip install, because the Red Pitaya has no
 internet). It saves measurements in `/var/lib/spectro`, and starts the
-`spectro` systemd service at boot. The app is
-at `http://rp.lan:8000`. Run the same two commands again to update. Saved
-measurements are kept.
+`spectro` systemd service at boot. The app is at `http://rp.lan:8000`. Run the
+same two commands again to update. Saved measurements are kept.
+
+The real instruments need `refurbishedPTI` importable by `/usr/bin/python3` on
+the Red Pitaya.
 
 Useful commands on the Red Pitaya:
 
@@ -51,40 +81,40 @@ systemctl status spectro
 journalctl -u spectro -f
 ```
 
-## Using the real instrument
+## Adding things
 
-In `src/spectro_webapp/measurements.py`, replace the body of `initialize()` with the set-up your
-scripts do (FPGA, spectrometer, motors) and return the object the measurements
-need. It runs when someone presses **Initialize** in the page, and the result is
-kept while the server runs. Measurements can't start before that.
-
-Then replace the bodies of `emission`, `excitation` and `lifetime`. Each one is
-a generator:
-
-- it receives the `instrument` returned by `initialize()`, `stop` (a
-  `threading.Event`) and the parameters from the form,
-- it `yield`s the full list of rows measured so far whenever there is new data,
-  for example after each wavelength or every few hundred laser pulses,
-- it returns early when `stop.is_set()`.
-
-Raising an exception (for example `ValueError("...")` for bad parameters) shows
-the message in the page. The parameters and their defaults are in
-`MEASUREMENTS` at the bottom of the file. The form is built from that list, so
-adding a parameter there adds it to the page.
+- **A measurement parameter**: add it to `MEASUREMENTS` at the bottom of
+  `measurements.py`. The form is built from it.
+- **A measurement**: write a generator `run(instruments, stop, **params)`
+  and add it to `MEASUREMENTS`. `instruments` is
+  `{"spectrometer": ..., "laser": ...}` (`None` if not connected). Yield the
+  full list of rows so far whenever there's new data, return early when
+  `stop.is_set()`, and raise an exception with a clear message for problems.
+- **An instrument action**: add an `action(...)` to the runner's `actions` in
+  `runners.py` and a method with the same name. Its fields become keyword
+  arguments.
+- **A reading**: add a `reading(...)` to the runner's `readings` and return
+  it from `read()`.
 
 ## Saved files
 
-CSV with the parameters as `#` comment lines at the top:
+CSV with the parameters and the instrument readings as `#` comment lines at
+the top. The readings are as the measurement left them, before the laser is
+turned off:
 
 ```
-# measurement: emission
+# measurement: lifetime
 # sample: Rhodamine 6G
-# started: 2026-10-02T15:46:01
+# started: 2026-10-06T12:38:06
 # status: done
-# excitation_wavelength: 400.0
+# emission_wavelength: 540.0
 ...
-wavelength_nm,counts
-450.0,2044
+# spectrometer.emission_wavelength: 540.0
+# laser.output: ON
+# laser.laser_current: 0.1
+...
+time_us,counts
+0.0,4
 ```
 
 Read it with `pandas.read_csv(path, comment="#")`. Stopped measurements are
