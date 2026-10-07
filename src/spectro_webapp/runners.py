@@ -148,8 +148,12 @@ class SpectrometerRunner(InstrumentRunner):
             from .dummies import DummySpectrometer
 
             return DummySpectrometer(self.simulation)
+        import rp  # the Red Pitaya API, only installed on the board
         from refurbishedPTI.instruments import Spectrometer
 
+        # Initialize the FPGA. Also needed again after another Red Pitaya app ran.
+        if rp.rp_Init() != 0:  # 0 is RP_OK
+            raise RuntimeError("Couldn't initialize the Red Pitaya (rp_Init failed).")
         return Spectrometer.constructor_default()
 
     def read(self):

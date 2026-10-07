@@ -73,7 +73,8 @@ the app runs on a laptop without it.
 
 **Spectrometer panel**
 
-- Initialize (`Spectrometer.constructor_default()`).
+- Initialize: `rp.rp_Init()` (initializes the FPGA; the `rp` module only
+  exists on the Red Pitaya), then `Spectrometer.constructor_default()`.
 - Go to an excitation / emission wavelength (moves the monochromator).
 - Set the current excitation / emission wavelength without moving (for when
   the position the software knows is wrong).
