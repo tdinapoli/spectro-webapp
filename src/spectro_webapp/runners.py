@@ -35,6 +35,49 @@ def check_wavelength(mono, wavelength, name):
         )
 
 
+def apply_laser_settings(itc, laser_current, frequency, duty_cycle):
+    """Set the ITC4020 current (A), pulse frequency (Hz) and duty cycle (%)."""
+    if laser_current < 0:
+        raise ValueError("Current can't be negative.")
+    if frequency <= 0:
+        raise ValueError("Frequency must be positive.")
+    if not 0 < duty_cycle < 100:
+        raise ValueError("Duty cycle must be between 0 and 100 %.")
+    itc.laser_current = laser_current
+    itc.frequency = frequency
+    itc.duty_cycle = duty_cycle
+
+
+def turn_laser_on(itc):
+    """Turn the ITC4020 output on, or raise an error saying why it can't."""
+    if itc.keylock_tripped:
+        raise RuntimeError("The keylock is tripped: turn the safety key.")
+    if itc.modulation and itc.qcw_mode:
+        raise RuntimeError("Modulation and QCW mode are both on: turn one off.")
+    itc.turn_on_laser()  # waits while the laser is temperature tripped
+    if not itc.ld_output:
+        raise RuntimeError("The laser didn't turn on.")
+
+
+def set_qcw_mode(itc, on):
+    """Switch the ITC4020 to pulsed (QCW) or continuous mode.
+
+    The output is turned off for the switch and back on afterwards, so the
+    laser ends up as it was, but in the new mode.
+    """
+    if itc.qcw_mode == on:
+        return
+    was_on = itc.ld_output
+    if was_on:
+        itc.ld_output = False
+    itc.qcw_mode = on
+    if itc.qcw_mode != on:
+        mode = "pulsed (QCW)" if on else "continuous"
+        raise RuntimeError(f"Couldn't switch the laser to {mode} mode.")
+    if was_on:
+        turn_laser_on(itc)
+
+
 class InstrumentRunner:
     name = ""
     label = ""
@@ -184,26 +227,10 @@ class LaserRunner(InstrumentRunner):
                     mode="pulsed (QCW)" if itc.qcw_mode else "continuous")
 
     def apply(self, laser_current, frequency, duty_cycle):
-        if laser_current < 0:
-            raise ValueError("Current can't be negative.")
-        if frequency <= 0:
-            raise ValueError("Frequency must be positive.")
-        if not 0 < duty_cycle < 100:
-            raise ValueError("Duty cycle must be between 0 and 100 %.")
-        itc = self.instrument
-        itc.laser_current = laser_current
-        itc.frequency = frequency
-        itc.duty_cycle = duty_cycle
+        apply_laser_settings(self.instrument, laser_current, frequency, duty_cycle)
 
     def laser_on(self):
-        itc = self.instrument
-        if itc.keylock_tripped:
-            raise RuntimeError("The keylock is tripped: turn the safety key.")
-        if itc.modulation and itc.qcw_mode:
-            raise RuntimeError("Modulation and QCW mode are both on: turn one off.")
-        itc.turn_on_laser()  # waits while the laser is temperature tripped
-        if not itc.ld_output:
-            raise RuntimeError("The laser didn't turn on.")
+        turn_laser_on(self.instrument)
 
     def laser_off(self):
         self.instrument.ld_output = False
