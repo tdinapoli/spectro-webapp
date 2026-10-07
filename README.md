@@ -23,8 +23,9 @@ pyproject.toml     package metadata and pixi environment
 ## Using the page
 
 - **Instruments** tab: choose the spectrometer or the laser in the dropdown.
-  - Spectrometer: Initialize, go to an excitation/emission wavelength, home
-    each monochromator, or set the current wavelength without moving.
+  - Spectrometer: Initialize (also homes both monochromators), go to an
+    excitation/emission wavelength, home each monochromator, or set the
+    current wavelength without moving.
   - Laser: Connect, apply current/frequency/duty cycle, Laser ON/OFF.
 - **Measurements** tab: choose emission, excitation or lifetime in the
   dropdown, fill in the form, and press Start.

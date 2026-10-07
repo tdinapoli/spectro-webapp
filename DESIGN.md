@@ -74,13 +74,14 @@ the app runs on a laptop without it.
 **Spectrometer panel**
 
 - Initialize: `rp.rp_Init()` (initializes the FPGA; the `rp` module only
-  exists on the Red Pitaya), then `Spectrometer.constructor_default()`.
+  exists on the Red Pitaya), then `Spectrometer.constructor_default(home=True)`,
+  which homes both monochromators.
 - Go to an excitation / emission wavelength (moves the monochromator).
 - Set the current excitation / emission wavelength without moving (for when
   the position the software knows is wrong).
 - Home the excitation / emission monochromator.
-- Readings: current excitation and emission wavelengths ("unknown" until
-  homed or set).
+- Readings: current excitation and emission wavelengths ("unknown" if a
+  homing didn't reach the limit switch, until homed or set).
 - Future: "integrate counts", which counts photons for a chosen integration
   time and shows the result in the status.
 

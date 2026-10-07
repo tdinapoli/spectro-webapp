@@ -119,7 +119,7 @@ class SpectrometerRunner(InstrumentRunner):
     name = "spectrometer"
     label = "Spectrometer"
     connect_label = "Initialize"
-    connect_busy = "Initializing the spectrometer"
+    connect_busy = "Initializing the spectrometer and homing the monochromators"
     actions = [
         action("goto_excitation", "Go",
                [param("wavelength", "Excitation wavelength", 400, "nm")],
@@ -147,14 +147,14 @@ class SpectrometerRunner(InstrumentRunner):
         if self.simulation is not None:
             from .dummies import DummySpectrometer
 
-            return DummySpectrometer(self.simulation)
+            return DummySpectrometer(self.simulation, home=True)
         import rp  # the Red Pitaya API, only installed on the board
         from refurbishedPTI.instruments import Spectrometer
 
         # Initialize the FPGA. Also needed again after another Red Pitaya app ran.
         if rp.rp_Init() != 0:  # 0 is RP_OK
             raise RuntimeError("Couldn't initialize the Red Pitaya (rp_Init failed).")
-        return Spectrometer.constructor_default()
+        return Spectrometer.constructor_default(home=True)
 
     def read(self):
         spec = self.instrument
