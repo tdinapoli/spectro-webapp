@@ -116,6 +116,15 @@ the app runs on a laptop without it.
   switch a connected laser to continuous mode. Lifetime switches it to pulsed
   (QCW) mode. Switching turns the output off and back on, because the
   ITC4020 may refuse to change mode with the output on.
+- **Laser current sweeps** run a measurement once per laser current (start,
+  end, step, end included). For each current, they set it, turn the laser on
+  if it's off, wait `SETTLE_TIME` (0.5 s) and run the whole measurement. The
+  laser stays on between currents. One CSV per sweep, with the current as
+  first column (`series=True`, so the plot draws one curve per current).
+  Stop ends the whole sweep and saves what was measured.
+- **Emission vs laser current** is an emission spectrum per current, with
+  the laser in continuous mode and the lamp off by hand. Its form has no
+  excitation wavelength, frequency or duty cycle.
 - **Lifetime** triggers on the laser TTL, so it needs the laser connected.
   Its form has the laser current, frequency and duty cycle: it applies them,
   switches to QCW mode and turns the laser on itself (and the manager turns

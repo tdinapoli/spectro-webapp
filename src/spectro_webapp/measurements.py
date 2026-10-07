@@ -28,6 +28,7 @@ from .runners import (
 )
 
 PLOT_INTERVAL = 0.2  # s between lifetime plot updates (pulses come every few ms)
+SETTLE_TIME = 0.5  # s to wait after changing the laser current in a sweep
 
 
 def need(instruments, name, message):
@@ -49,6 +50,38 @@ def continuous_laser(instruments):
     """Steady-state spectra use the laser (if it's connected) in continuous mode."""
     if instruments.get("laser") is not None:
         set_qcw_mode(instruments["laser"], False)
+
+
+def current_range(current_start, current_end, current_step):
+    """Laser currents from start to end (included), like a wavelength sweep."""
+    if current_step <= 0:
+        raise ValueError("Current step must be positive.")
+    if current_start < 0:
+        raise ValueError("Current can't be negative.")
+    if current_end < current_start:
+        raise ValueError("Ending current must not be less than starting current.")
+    n = int((current_end - current_start) / current_step + 1e-9) + 1
+    return [round(current_start + i * current_step, 9) for i in range(n)]
+
+
+def current_sweep(laser, stop, currents, measure):
+    """Run measure() once per laser current, with the laser on.
+
+    measure() is a generator that yields its rows so far, like a measurement.
+    The sweep yields every row so far, each with the current as first column.
+    """
+    rows = []
+    for current in currents:
+        laser.laser_current = current
+        if not laser.ld_output:
+            turn_laser_on(laser)
+        time.sleep(SETTLE_TIME)
+        last = []
+        for last in measure():
+            yield rows + [[current] + row for row in last]
+        rows += [[current] + row for row in last]
+        if stop.is_set():
+            return
 
 
 def spectrum(
@@ -142,6 +175,49 @@ def excitation(
     )
 
 
+def emission_current_sweep(
+    instruments,
+    stop,
+    current_start,
+    current_end,
+    current_step,
+    starting_wavelength,
+    ending_wavelength,
+    wavelength_step,
+    integration_time,
+):
+    """One emission spectrum per laser current, excited by the laser.
+
+    The laser runs in continuous mode; switch the lamp off by hand.
+    """
+    spec = need(instruments, "spectrometer", "Initialize the spectrometer first.")
+    laser = need(instruments, "laser", "Connect the laser first.")
+    check_range(
+        spec.emission_mono,
+        starting_wavelength,
+        ending_wavelength,
+        wavelength_step,
+        "emission",
+    )
+    if integration_time <= 0:
+        raise ValueError("Integration time must be positive.")
+    currents = current_range(current_start, current_end, current_step)
+    set_qcw_mode(laser, False)
+
+    def measure():
+        return spectrum(
+            spec,
+            stop,
+            spec.emission_mono,
+            integration_time,
+            starting_wavelength,
+            ending_wavelength,
+            wavelength_step,
+        )
+
+    yield from current_sweep(laser, stop, currents, measure)
+
+
 def lifetime(
     instruments,
     stop,
@@ -199,6 +275,11 @@ SPECTRUM_PARAMS = [
     param("integration_time", "Integration time", 0.1, "s"),
 ]
 SPECTRUM_COLUMNS = ["wavelength_nm", "counts", "integrated_time_s"]
+CURRENT_SWEEP_PARAMS = [
+    param("current_start", "Starting laser current", 0.02, "A"),
+    param("current_end", "Ending laser current", 0.1, "A"),
+    param("current_step", "Laser current step", 0.02, "A"),
+]
 
 # label: menu entry. run: the generator. columns: CSV columns; the plot shows
 # the first two. params: the form. log_y: start with a log scale. series: the
@@ -224,6 +305,18 @@ MEASUREMENTS = {
             param("emission_wavelength", "Emission wavelength", 540, "nm"),
             param("starting_wavelength", "Starting wavelength", 300, "nm"),
             param("ending_wavelength", "Ending wavelength", 500, "nm"),
+        ]
+        + SPECTRUM_PARAMS,
+    ),
+    "emission_current_sweep": dict(
+        label="Emission vs laser current",
+        run=emission_current_sweep,
+        columns=["current_A"] + SPECTRUM_COLUMNS,
+        series=True,
+        params=CURRENT_SWEEP_PARAMS
+        + [
+            param("starting_wavelength", "Starting wavelength", 470, "nm"),
+            param("ending_wavelength", "Ending wavelength", 650, "nm"),
         ]
         + SPECTRUM_PARAMS,
     ),

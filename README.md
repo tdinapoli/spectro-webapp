@@ -39,6 +39,10 @@ pyproject.toml     package metadata and pixi environment
   panel, switch the lamp off by hand, and run a normal emission spectrum.
 - Emission and excitation spectra switch the laser (if connected) to
   continuous mode.
+- **Emission vs laser current** takes one emission spectrum per laser
+  current, in continuous mode. Connect the laser and switch the lamp off by
+  hand; the measurement turns the laser on. The CSV has a `current_A` column:
+  use `df.groupby("current_A")`.
 - Lifetime triggers on the laser: connect it first. The lifetime form has the
   laser current, frequency and duty cycle; the measurement applies them,
   switches the laser to pulsed (QCW) mode and turns it on.
